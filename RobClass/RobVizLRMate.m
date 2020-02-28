@@ -7,6 +7,8 @@ classdef RobVizLRMate < RobotObj
         parts;
         h_rob;
         h_marker;
+        h_gnd;
+        h_bnd;
         sta;
         xyz_target;
         jnt_pos;
@@ -54,9 +56,33 @@ classdef RobVizLRMate < RobotObj
             T_DS2W = [rpy2r(RPY_W2DS, 'zyx') * [eye(3) -WOrigin']; 0 0 0 1];   % transformation from the design space frame to world frame
             obj.T_B2W = T_DS2W * T_B2DS;                     % transformation from robot base (J1) frame to world frame
 
-            [jntT]=kfwd_rob_LRMate_full(obj.jnt_pos,obj.si.DH,obj.rtb.tool,obj.T_B2W);
+            [jntT]=kfwd_rob_LRMate_full(obj.jnt_pos,obj.si.DH,double(obj.rtb.tool),obj.T_B2W);
             obj.xyz_target=jntT(1:3,4,end);
             obj.home_xyz=obj.xyz_target;
+        end
+        
+        function delete(obj)
+            disp("delete robot");
+            for i=1:length(obj.h_rob)
+                if isgraphics(obj.h_rob(i))
+                    delete(obj.h_rob(i));
+                end
+            end
+            for i=1:length(obj.h_marker)
+                if isgraphics(obj.h_marker(i))
+                    delete(obj.h_marker(i));
+                end
+            end
+            for i=1:length(obj.h_gnd)
+                if isgraphics(obj.h_gnd(i))
+                    delete(obj.h_gnd(i));
+                end
+            end
+            for j=1:length(obj.h_bnd)
+                if isgraphics(obj.h_bnd(j))
+                    delete(obj.h_bnd(j));
+                end
+            end
         end
         
         function loadCAD(obj)
@@ -83,6 +109,8 @@ classdef RobVizLRMate < RobotObj
             obj.Am=Am;
             obj.v_threshold=Am*dt*0.5;
             obj.enb=true;
+            % init 
+            obj.moveit3();
             while(obj.sta)
                 obj.stateUp;
             end
@@ -95,11 +123,11 @@ classdef RobVizLRMate < RobotObj
             vel_=J*obj.jnt_vel;
             vel_=vel_(1:3);
             
-            global x_rec xdot_rec q_rec qdot_rec
-            x_rec=[x_rec,pos_(:)];
-            xdot_rec=[xdot_rec,vel_(:)];
-            q_rec=[q_rec,obj.jnt_pos(:)];
-            qdot_rec=[qdot_rec,obj.jnt_vel(:)];
+%             global x_rec xdot_rec q_rec qdot_rec
+%             x_rec=[x_rec,pos_(:)];
+%             xdot_rec=[xdot_rec,vel_(:)];
+%             q_rec=[q_rec,obj.jnt_pos(:)];
+%             qdot_rec=[qdot_rec,obj.jnt_vel(:)];
                 
             [~,vel_]=OTG(obj.xyz_target,pos_,vel_,obj.Vm,obj.Am,obj.dt);
             if norm(vel_,inf) < obj.v_threshold
@@ -140,8 +168,8 @@ classdef RobVizLRMate < RobotObj
             A=obj.si.DH(:,2);
             D=obj.si.DH(:,3);
             alpha=obj.si.DH(:,1);
-            R_tool=obj.rtb.tool(1:3,1:3);
-            T_tool=obj.rtb.tool(1:3,4);
+            R_tool=double(obj.rtb.tool.R);
+            T_tool=double(obj.rtb.tool.t);
             % Kinematics
             q=obj.jnt_pos;
             for i=1:6
@@ -186,7 +214,8 @@ classdef RobVizLRMate < RobotObj
             xlimit=[0,1];
             ylimit=[0,1];
             zlimit=[0,1];
-            hold on;
+            clf;hold on;
+            set(gcf,'WindowStyle','docked');
             viewang=[128,15];
             [jntT]=kfwd_rob_LRMate_full(obj.jnt_pos(:),...
                                      obj.si.DH,...
@@ -209,7 +238,7 @@ classdef RobVizLRMate < RobotObj
             set(obj.h_marker,'facecolor','c');
             set(obj.h_marker,'edgecolor','none');
             set(obj.h_marker,'Clipping','off');
-            patch('faces',[1,2,3,4],'vertices',...
+            obj.h_gnd = patch('faces',[1,2,3,4],'vertices',...
                 [1,1,0;1,-1,0;-1,-1,0;-1,1,0]*1.5,...
                 'facealpha',0.2);
             % set lighting, view, etc
@@ -225,9 +254,7 @@ classdef RobVizLRMate < RobotObj
             set(gca,'Clipping','off');
             axis off;
             set(gca,'Position',[-0 -0, 1 1]);
-            % init 
-            obj.moveit3();
-            % modification
+            % modification on mesh points
             obj.delta=0*obj.xyz_target;
             temp=[mean(mean(get(obj.h_marker,'XData')));...
                   mean(mean(get(obj.h_marker,'YData')));...
@@ -238,15 +265,6 @@ classdef RobVizLRMate < RobotObj
             set(obj.h_marker,'YData',get(obj.h_marker,'YData') + dis(2));
             set(obj.h_marker,'ZData',get(obj.h_marker,'ZData') + dis(3));
             
-            %posold=obj.xyz_target;
-            %obj.xyz_target=[mean(mean(get(obj.h_marker,'XData')));...
-            %                mean(mean(get(obj.h_marker,'YData')));...
-            %                mean(mean(get(obj.h_marker,'ZData')))];
-            %obj.delta=obj.xyz_target-posold;
-            
-            %set(gcf,'color','w');% change background color
-            % plot bouncary limit
-            
         end
         
         function moveit3(obj)
@@ -256,6 +274,17 @@ classdef RobVizLRMate < RobotObj
             set(obj.h_marker,'ButtonDownFcn',@obj.startmovit);
             set(gcf,'KeyPressFcn',@obj.keypre);
             set(gcf,'KeyReleaseFcn',@obj.keyrel);
+            % Store gui object
+            set(gcf,'UserData',gui);
+        end
+        
+        function demoveit3(obj)
+             % Unpack gui object
+            gui = get(gcf,'UserData');
+            % Make a fresh figure window
+            set(obj.h_marker,'ButtonDownFcn',[]);
+            set(gcf,'KeyPressFcn',[]);
+            set(gcf,'KeyReleaseFcn',[]);
             % Store gui object
             set(gcf,'UserData',gui);
         end
@@ -281,9 +310,11 @@ classdef RobVizLRMate < RobotObj
         
         function keypre(obj,src,evnt)
             switch evnt.Key
-                case 'k'
+                case 'escape'
                     obj.sta=false;
                     obj.enb=false;
+                    % remove handles 
+                    obj.demoveit3();
                 case 'q'
                     obj.UDPenable();
             end
@@ -398,14 +429,14 @@ classdef RobVizLRMate < RobotObj
             X=obj.bound_c(1)+obj.bound_rout*cos(t2).*cos(t1);
             Y=obj.bound_c(2)+obj.bound_rout*cos(t2).*sin(t1);
             Z=obj.bound_c(3)+obj.bound_rout*sin(t2);
-            mesh(X,Y,Z,'facealpha',alpha,...
+            obj.h_bnd(1)=mesh(X,Y,Z,'facealpha',alpha,...
                 'facecolor',facecolor,'edgecolor',edgecolor);
             n2=20;
             [t1,t2]=meshgrid(linspace(-pi,pi,n2),linspace(0,pi/2,n2));
             X=obj.bound_c(1)+obj.bound_rin*cos(t2).*cos(t1);
             Y=obj.bound_c(2)+obj.bound_rin*cos(t2).*sin(t1);
             Z=obj.bound_c(3)+obj.bound_rin*sin(t2);
-            mesh(X,Y,Z,'facealpha',alpha,...
+            obj.h_bnd(2)=mesh(X,Y,Z,'facealpha',alpha,...
                 'facecolor',facecolor,'edgecolor',edgecolor);
             n3=20;
             [r,t]=meshgrid(linspace(obj.bound_rin,obj.bound_rout,n3),...
@@ -413,7 +444,7 @@ classdef RobVizLRMate < RobotObj
             X=obj.bound_c(1)+r.*cos(t);
             Y=obj.bound_c(2)+r.*sin(t);
             Z=obj.bound_c(3)*ones(n3);
-            mesh(X,Y,Z,'facealpha',alpha,...
+            obj.h_bnd(3)=mesh(X,Y,Z,'facealpha',alpha,...
                 'facecolor',facecolor,'edgecolor',edgecolor);
             faces=[5 6 7 8;2 6 7 3;3 7 8 4;4 8 5 1;1 5 6 2;1 2 3 4];
             vertices=[obj.x_bound(2) obj.y_bound(1) obj.z_bound(2);...
@@ -427,7 +458,7 @@ classdef RobVizLRMate < RobotObj
             for i=1:3
                 vertices(:,i)=vertices(:,i)+obj.bound_c(i);
             end            
-            patch('faces',faces,'vertices',vertices,...
+            obj.h_bnd(4)=patch('faces',faces,'vertices',vertices,...
                 'facealpha',0.3,...
                 'facecolor','none','edgecolor','k');
         end

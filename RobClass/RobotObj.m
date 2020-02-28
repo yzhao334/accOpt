@@ -59,7 +59,7 @@ classdef RobotObj < handle
             % construct full robot 
             obj. rtb = SerialLink(L, 'name', r.name, 'manufacturer', r.manufacturer);
             obj.rtb.tool = eye(4);
-            obj.rtb.tool(3,4) = 0.027+0.0157+0.027 + 0.1714;%0.14605;
+            obj.rtb.tool.t = [0 0 0.027+0.0157+0.027 + 0.1714];%0.14605;
             
             obj.trans = eye(6);
             

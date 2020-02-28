@@ -30,7 +30,7 @@ for i=1:6
     jntT(:,:,i+1) = TCP_T;
 end
 TCP_T=TCP_T*... % up to now, forward kinematics, S0 to S6
-    tool; % S6 to tool
+    double(tool); % S6 to tool
 jntT(:,:,end) = TCP_T;
 
 end
