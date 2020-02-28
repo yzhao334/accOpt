@@ -42,7 +42,7 @@ then drag blue ball using mouse. The robot should try to reach the blue ball wit
     <img src="demo.gif", width="360">
 </p>
 
-### Terminate simulation by pressing the key `k` in the figure window
+### Terminate simulation by pressing the ESC key in the figure window
 
 ====
 
